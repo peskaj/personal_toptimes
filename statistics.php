@@ -44,37 +44,6 @@ $pos_3_percentage = ($total_toptimes > 0) ? ($position_stats['pos_3'] / $total_t
 $pos_4_10_percentage = ($total_toptimes > 0) ? ($position_stats['pos_4_10'] / $total_toptimes) * 100 : 0;
 $pos_11_plus_percentage = ($total_toptimes > 0) ? ($position_stats['pos_11_plus'] / $total_toptimes) * 100 : 0;
 
-// Query for date statistics
-$date_sql = "
-    SELECT 
-        DATE_FORMAT(date, '%Y-%m-%d') as day,
-        COUNT(*) as count_per_day,
-        DATE_FORMAT(date, '%Y-%u') as week,
-        COUNT(*) as count_per_week,
-        DATE_FORMAT(date, '%Y-%m') as month,
-        COUNT(*) as count_per_month,
-        DATE_FORMAT(date, '%Y') as year,
-        COUNT(*) as count_per_year
-    FROM maps
-    WHERE date >= '2006-01-01'  -- Exclude dates below 2006
-    GROUP BY day, week, month, year
-    ORDER BY day
-";
-$date_sql = "
-    SELECT 
-        DATE_FORMAT(date, '%Y-%m-%d') as day,
-        COUNT(*) as count_per_day,
-        DATE_FORMAT(date, '%Y-%u') as week,
-        COUNT(*) as count_per_week,
-        DATE_FORMAT(date, '%Y-%m') as month,
-        COUNT(*) as count_per_month,
-        DATE_FORMAT(date, '%Y') as year,
-        COUNT(*) as count_per_year
-    FROM maps
-    WHERE date >= '2006-01-01'  -- Exclude dates below 2006
-    GROUP BY day, week, month, year
-    ORDER BY day
-";
 // Query for date statistics, excluding dates before 2006
 $date_sql = "
     SELECT 
@@ -84,11 +53,10 @@ $date_sql = "
         DATE_FORMAT(date, '%Y-%m') as month,
         DATE_FORMAT(date, '%Y') as year
     FROM maps
-    WHERE date >= '2006-01-01'  -- Exclude dates below 2006
+    WHERE date >= '2006-01-01'
     GROUP BY day, week, month, year
     ORDER BY day
 ";
-
 $date_result = $conn->query($date_sql);
 
 $daily_counts = [];
@@ -96,35 +64,44 @@ $weekly_counts = [];
 $monthly_counts = [];
 $yearly_counts = [];
 
-// Initialize counts
+// Initialize counts and cumulative passed map data
+$total_passed_so_far = 0;
 while ($row = $date_result->fetch_assoc()) {
-    // Daily counts
     if (isset($row['day'])) {
         $daily_counts[$row['day']] = $row['count_per_day'];
     }
-    // Weekly counts
     if (isset($row['week'])) {
         if (!isset($weekly_counts[$row['week']])) {
             $weekly_counts[$row['week']] = 0;
         }
-        $weekly_counts[$row['week']] += $row['count_per_day']; // Sum counts for the week
+        $weekly_counts[$row['week']] += $row['count_per_day'];
     }
-    // Monthly counts
     if (isset($row['month'])) {
         if (!isset($monthly_counts[$row['month']])) {
             $monthly_counts[$row['month']] = 0;
         }
-        $monthly_counts[$row['month']] += $row['count_per_day']; // Sum counts for the month
+        $monthly_counts[$row['month']] += $row['count_per_day'];
     }
-    // Yearly counts
     if (isset($row['year'])) {
         if (!isset($yearly_counts[$row['year']])) {
             $yearly_counts[$row['year']] = 0;
         }
-        $yearly_counts[$row['year']] += $row['count_per_day']; // Sum counts for the year
+        $yearly_counts[$row['year']] += $row['count_per_day'];
     }
+    $total_passed_so_far += $row['count_per_day'];
 }
 
+// Query for passed maps by category (HDM, DM, OS)
+$category_sql = "
+    SELECT 
+        SUM(CASE WHEN tag = 'HDM' THEN 1 ELSE 0 END) as hdm_count,
+        SUM(CASE WHEN tag = 'DM' THEN 1 ELSE 0 END) as dm_count,
+        SUM(CASE WHEN tag = 'OS' THEN 1 ELSE 0 END) as os_count
+    FROM maps
+    WHERE passed = 1
+";
+$category_result = $conn->query($category_sql);
+$category_counts = $category_result->fetch_assoc();
 
 $conn->close();
 ?>
@@ -139,13 +116,16 @@ $conn->close();
     <style>
         .chart-container {
             width: 100%;
-            height: 200px;
+            height: 300px;
         }
         .stat-card {
             border: 1px solid #ddd;
             border-radius: 5px;
             padding: 20px;
             margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
         .stat-card h3 {
             margin-bottom: 20px;
@@ -207,6 +187,22 @@ $conn->close();
                 </div>
             </div>
         </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="stat-card">
+                    <h3>Passed Maps by Category</h3>
+                    <p>HDM: <?php echo $category_counts['hdm_count']; ?></p>
+                    <p>DM: <?php echo $category_counts['dm_count']; ?></p>
+                    <p>OS: <?php echo $category_counts['os_count']; ?></p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="stat-card">
+                    <canvas id="categoryChart" class="chart-container"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -256,7 +252,7 @@ $conn->close();
 
         new Chart(document.getElementById('positionChart'), positionChartConfig);
 
-        // Data for date statistics
+        // Data for date statistics (bar chart)
         const dateLabels = <?php echo json_encode(array_keys($daily_counts)); ?>;
         const dateCounts = <?php echo json_encode(array_values($daily_counts)); ?>;
 
@@ -265,13 +261,12 @@ $conn->close();
             datasets: [{
                 label: 'Toptimes per Day',
                 data: dateCounts,
-                borderColor: 'blue',
-                fill: false
+                backgroundColor: 'rgba(54, 162, 235, 0.6)'
             }]
         };
 
         const dateChartConfig = {
-            type: 'line',
+            type: 'bar',
             data: dateChartData,
             options: {
                 responsive: true,
@@ -280,6 +275,30 @@ $conn->close();
         };
 
         new Chart(document.getElementById('dateChart'), dateChartConfig);
+
+        // Data for passed maps by category (pie chart)
+        const categoryData = {
+            labels: ['HDM', 'DM', 'OS'],
+            datasets: [{
+                data: [
+                    <?php echo $category_counts['hdm_count']; ?>,
+                    <?php echo $category_counts['dm_count']; ?>,
+                    <?php echo $category_counts['os_count']; ?>
+                ],
+                backgroundColor: ['purple', 'orange', 'green']
+            }]
+        };
+
+        const categoryChartConfig = {
+            type: 'pie',
+            data: categoryData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        };
+
+        new Chart(document.getElementById('categoryChart'), categoryChartConfig);
     </script>
 </body>
 </html>
