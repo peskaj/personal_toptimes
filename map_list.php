@@ -7,8 +7,8 @@
     <style>
         .tag-circle {
             width: 46px;
-            height: 31px;
-            line-height: 31px;
+            height: 29px;
+            line-height: 25px;
             text-align: center;
             border-radius: 25%;
             font-weight: bold;
@@ -32,8 +32,29 @@
             background-color: #f8f9fa;
             font-weight: bold;
         }
-        tr:nth-child(even) {
-            background-color: #f2f2f2;
+        td.map-name {
+            text-align: left; /* Align text to the left for map name */
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .pagination a {
+            color: black;
+            padding: 8px 16px;
+            text-decoration: none;
+            border: 1px solid #ddd;
+            margin: 0 4px;
+            transition: background-color 0.3s;
+        }
+        .pagination a:hover {
+            background-color: #ddd;
+        }
+        .pagination a.active {
+            background-color: #007bff;
+            color: white;
+            border: 1px solid #007bff;
         }
     </style>
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
@@ -46,12 +67,11 @@
             <div>
                 <label for="recordsPerPage">Show:</label>
                 <select id="recordsPerPage" class="form-control d-inline-block w-auto">
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="500">500</option>
-                    <option value="1000">1000</option>
-                    <option value="all">All</option>
+                    <option value="25" <?php if(isset($_GET['limit']) && $_GET['limit'] == 25) echo 'selected'; ?>>25</option>
+                    <option value="50" <?php if(isset($_GET['limit']) && $_GET['limit'] == 50) echo 'selected'; ?>>50</option>
+                    <option value="100" <?php if(isset($_GET['limit']) && $_GET['limit'] == 100) echo 'selected'; ?>>100</option>
+                    <option value="500" <?php if(isset($_GET['limit']) && $_GET['limit'] == 500) echo 'selected'; ?>>500</option>
+                    <option value="1000" <?php if(isset($_GET['limit']) && $_GET['limit'] == 1000) echo 'selected'; ?>>1000</option>
                 </select>
             </div>
         </div>
@@ -85,9 +105,20 @@
                         die("Connection failed: " . $conn->connect_error);
                     }
 
-                    // Fetch and sort maps alphabetically by author and map name
-                    $sql = "SELECT * FROM maps ORDER BY author ASC, name ASC";
+                    // Determine the current page and the limit
+                    $limit = isset($_GET['limit']) ? $_GET['limit'] : 25;
+                    $page = isset($_GET['page']) ? $_GET['page'] : 1;
+                    $offset = ($page - 1) * $limit;
+
+                    // Fetch and sort maps alphabetically by author and map name with pagination
+                    $sql = "SELECT * FROM maps ORDER BY author ASC, name ASC LIMIT $limit OFFSET $offset";
                     $result = $conn->query($sql);
+
+                    // Get total number of records
+                    $sql_total = "SELECT COUNT(*) AS total FROM maps";
+                    $result_total = $conn->query($sql_total);
+                    $total_records = $result_total->fetch_assoc()['total'];
+                    $total_pages = ceil($total_records / $limit);
 
                     if ($result->num_rows > 0) {
                         while ($row = $result->fetch_assoc()) {
@@ -106,7 +137,7 @@
 
                             echo "<tr>";
                             echo "<td><span class='tag-circle $tag_class'>{$row['Tag']}</span></td>";
-                            echo "<td>{$map_name}</td>";
+                            echo "<td class='map-name'>{$map_name}</td>";
                             echo "<td>" . ($row['position'] != 0 ? $row['position'] : '') . "</td>";
                             echo "<td>{$row['time_passed']}</td>";
                             echo "<td>{$formatted_date}</td>";
@@ -124,6 +155,30 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination links -->
+        <div class="pagination">
+            <?php
+            $visible_pages = 5; // Number of pages to display at once
+            $start_page = max(1, $page - floor($visible_pages / 2));
+            $end_page = min($total_pages, $start_page + $visible_pages - 1);
+
+            if ($page > 1) {
+                echo "<a href='?page=1&limit=$limit'>&laquo;</a>";
+                echo "<a href='?page=".($page - 1)."&limit=$limit'>&lt;</a>";
+            }
+
+            for ($i = $start_page; $i <= $end_page; $i++) {
+                $active = $i == $page ? 'active' : '';
+                echo "<a href='?page=$i&limit=$limit' class='$active'>$i</a>";
+            }
+
+            if ($page < $total_pages) {
+                echo "<a href='?page=".($page + 1)."&limit=$limit'>&gt;</a>";
+                echo "<a href='?page=$total_pages&limit=$limit'>&raquo;</a>";
+            }
+            ?>
+        </div>
     </div>
 
     <script>
@@ -138,20 +193,10 @@
 
             // Records per page filter
             $("#recordsPerPage").on("change", function() {
-                var value = $(this).val();
-                var totalRecords = $("#mapTable tr").length;
-
-                if (value === "all") {
-                    $("#mapTable tr").show();
-                } else {
-                    var limit = parseInt(value);
-                    $("#mapTable tr").hide();
-                    $("#mapTable tr").slice(0, limit).show();
-                }
+                var limit = $(this).val();
+                var currentUrl = window.location.href.split('?')[0]; // Get the base URL without parameters
+                window.location.href = currentUrl + '?limit=' + limit + '&page=1'; // Reset to page 1 when limit changes
             });
-
-            // Trigger change to set initial display
-            $("#recordsPerPage").trigger("change");
         });
     </script>
 </body>

@@ -116,7 +116,15 @@ $conn->close();
     <style>
         .chart-container {
             width: 100%;
-            height: 300px;
+            height: 173px;
+        }
+        .chart-container2 {
+            width: 100%;
+            height: 253.6px;
+        }
+        .chart-container3 {
+            width: 100%;
+            height: 213.6px;
         }
         .stat-card {
             border: 1px solid #ddd;
@@ -166,7 +174,7 @@ $conn->close();
             </div>
             <div class="col-md-6">
                 <div class="stat-card">
-                    <canvas id="positionChart" class="chart-container"></canvas>
+                    <canvas id="positionChart" class="chart-container2"></canvas>
                 </div>
             </div>
         </div>
@@ -183,7 +191,7 @@ $conn->close();
             </div>
             <div class="col-md-6">
                 <div class="stat-card">
-                    <canvas id="dateChart" class="chart-container"></canvas>
+                    <canvas id="dateChart" class="chart-container3"></canvas>
                 </div>
             </div>
         </div>
